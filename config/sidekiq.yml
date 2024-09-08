@@ -1,0 +1,8 @@
+:scheduler:
+  :schedule:
+    chat_app_counter:
+      every: '50m'
+      class: AppChatCounterJob
+    chat_messages_counter:
+      every: '50m'
+      class: ChatMessageCounterJob

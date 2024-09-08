@@ -1,0 +1,114 @@
+version: '3.8' # Upgrade to the latest version
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.6.0
+    ports:
+      - '9200:9200'
+    environment:
+      - bootstrap.memory_lock=true
+      - discovery.type=single-node
+      - cluster.name=elasticsearch-rails
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m'
+      - 'http.host=0.0.0.0'
+      - 'transport.host=127.0.0.1'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    mem_limit: 1g
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9200']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:6-alpine # Upgrade to latest Redis version
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis:/data
+
+  db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: PASS@1234
+      MYSQL_DATABASE: instabug_challenge_chat_system
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 10s
+      retries: 5
+
+  sidekiq:
+    depends_on:
+      - db
+      - redis
+    build: .
+    command: bundle exec sidekiq
+    restart: always
+    volumes:
+      - '.:/app'
+      - '/app/tmp'
+    environment:
+      REDIS_URL_SIDEKIQ: redis://redis:6379/1
+      DB_USER: instabug
+      DB_NAME: instabug_challenge_chat_system
+      DB_PASSWORD: password
+      DB_HOST: db
+      ELASTIC_SEARCH_URL: http://elasticsearch:9200
+      SECRET_KEY_BASE: 5982cd61005748ecd99532a7cf22e1807274eeb178a2b1ecbae7ee2d7fd69e50744bb4adb4fe0d623a5872c91db5da5fc8d3ff0ff784b74bdb74e1755037a577
+    links:
+      - elasticsearch
+      - redis
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9200']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  app:
+    build: .
+    command: bash -c "rm -f /app/tmp/pids/server.pid && bundle exec rails s -b '0.0.0.0' -p 3000"
+    restart: always
+    volumes:
+      - '.:/app'
+    ports:
+      - '3000:3000'
+    depends_on:
+      - db
+      - elasticsearch
+      - redis
+      - sidekiq
+    links:
+      - db
+      - elasticsearch
+      - redis
+    environment:
+      DB_USER: instabug
+      DB_NAME: instabug_challenge_chat_system
+      DB_PASSWORD: password
+      DB_HOST: db
+      REDIS_URL_SIDEKIQ: redis://redis:6379/1
+      ELASTIC_SEARCH_URL: http://elasticsearch:9200
+      SECRET_KEY_BASE: 5982cd61005748ecd99532a7cf22e1807274eeb178a2b1ecbae7ee2d7fd69e50744bb4adb4fe0d623a5872c91db5da5fc8d3ff0ff784b74bdb74e1755037a577
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  esdata:
+  redis:
