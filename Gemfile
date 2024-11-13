@@ -31,7 +31,7 @@ gem "redis-namespace"
 gem "sidekiq"
 gem "sidekiq-scheduler"
 
-gem "elasticsearch", "< 7.14"
+gem "elasticsearch", "< 8.17"
 gem "elasticsearch-model"
 gem "elasticsearch-rails"
 
